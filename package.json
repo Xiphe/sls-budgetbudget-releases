@@ -1,0 +1,25 @@
+{
+  "name": "sls-budgetbudget-releases",
+  "private": true,
+  "version": "0.0.0-development",
+  "description": "proxy requests to github http api",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "serverless",
+    "github",
+    "api",
+    "proxy",
+    "cors"
+  ],
+  "author": "Hannes Diercks <node@xiphe.net> (https://xiphe.net/)",
+  "license": "MIT",
+  "dependencies": {
+    "mem": "6.1.1",
+    "node-fetch": "2.6.0",
+    "xml2js": "0.4.23"
+  },
+  "devDependencies": {}
+}

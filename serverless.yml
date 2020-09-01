@@ -1,0 +1,26 @@
+service: budgetbudget-releases
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  region: eu-west-1
+  stage: prod
+
+functions:
+  getRelease:
+    handler: handler.getRelease
+    events:
+      - http:
+          path: latest
+          method: get
+          cors: true
+      - http:
+          path: latest/{channel}
+          method: get
+          cors: true
+  download:
+    handler: handler.download
+    events:
+      - http:
+          path: download/{channel}
+          method: get
