@@ -17,6 +17,7 @@
   "author": "Hannes Diercks <node@xiphe.net> (https://xiphe.net/)",
   "license": "MIT",
   "dependencies": {
+    "cheerio": "1.0.0-rc.3",
     "mem": "6.1.1",
     "node-fetch": "2.6.0",
     "xml2js": "0.4.23"

@@ -5,6 +5,7 @@
 /** @type {typeof window.fetch} */
 const nodeFetch = require("node-fetch");
 const mem = require("mem");
+const cheerio = require("cheerio");
 const { parseStringPromise } = require("xml2js");
 
 /** @typedef {import("./types").ReleaseResponseEntry} ReleaseResponseEntry */
@@ -36,6 +37,10 @@ function isReleaseEntry(entry) {
     Array.isArray(entry.title) &&
     entry.title.length === 1 &&
     typeof entry.title[0] === "string" &&
+    /* title */
+    Array.isArray(entry.updated) &&
+    entry.updated.length === 1 &&
+    typeof entry.updated[0] === "string" &&
     /* content */
     Array.isArray(entry.content) &&
     entry.content.length === 1 &&
@@ -106,8 +111,41 @@ async function findLatestChannels(
     const channel = channelMatch ? channelMatch[1] : "stable";
     last = tag;
     if ((!channels.length || channels.includes(channel)) && !found[channel]) {
+      const $ = cheerio.load(release.content[0]._);
+      /** @type {Release['changelog']} */
+      const changelog = {};
+      $("h3").each((i, typeEl) => {
+        const type = $(typeEl).text();
+        if (!changelog[type]) {
+          changelog[type] = {};
+        }
+
+        $(typeEl)
+          .next("ul")
+          .children()
+          .each((i, childEl) => {
+            const $commitLink = $(childEl).find("a").last();
+            const $scope = $(childEl).find("strong").first();
+            const link = $commitLink.attr("href");
+            const commit = $commitLink.text();
+            const scope = $scope.length ? $scope.text().replace(/:$/, "") : "_";
+            $commitLink.remove();
+            $scope.remove();
+            const text = $(childEl)
+              .text()
+              .replace(/[\(\)]+$/, "")
+              .trim();
+
+            if (!changelog[type][scope]) {
+              changelog[type][scope] = {};
+            }
+            changelog[type][scope] = { text, link, commit };
+          });
+      });
+
       found[channel] = {
         title: release.title[0],
+        updated: release.updated[0],
         version: tag,
         channel,
         link: `https://github.com/Xiphe/budgetbudget/releases/tag/${tag}`,
@@ -115,7 +153,7 @@ async function findLatestChannels(
           /^v/,
           ""
         )}.dmg`,
-        changelog: release.content[0]._,
+        changelog,
       };
     }
   });
