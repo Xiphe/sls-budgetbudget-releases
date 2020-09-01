@@ -2,7 +2,7 @@
   "name": "sls-budgetbudget-releases",
   "private": true,
   "version": "0.0.0-development",
-  "description": "proxy requests to github http api",
+  "description": "read latest releases from github feed and provide redirect or info without cors pita",
   "main": "handler.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

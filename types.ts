@@ -7,7 +7,7 @@ export type Release = {
   changelog: string;
 };
 
-export type ReleaseList = { [key: string]: Release };
+export type ReleaseList = { [key: string]: Release | undefined };
 
 export type ReleaseResponseEntry = {
   link: [{ $: { href: string } }];

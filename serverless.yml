@@ -4,18 +4,21 @@ provider:
   name: aws
   runtime: nodejs12.x
   region: eu-west-1
-  stage: prod
+  stage: dev
 
 functions:
   getRelease:
     handler: handler.getRelease
     events:
       - http:
-          path: latest
+          path: latest/{channel}
           method: get
           cors: true
+  getReleases:
+    handler: handler.getReleases
+    events:
       - http:
-          path: latest/{channel}
+          path: latest
           method: get
           cors: true
   download:

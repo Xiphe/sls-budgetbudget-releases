@@ -2,10 +2,8 @@
 
 "use strict";
 
-/** @type any */
-const nodeFetch = require("node-fetch");
 /** @type {typeof window.fetch} */
-const fetch = nodeFetch;
+const nodeFetch = require("node-fetch");
 const mem = require("mem");
 const { parseStringPromise } = require("xml2js");
 
@@ -62,7 +60,7 @@ const fetchReleases = mem(
    * @returns {Promise<ReleaseResponseEntry[]>}
    */
   async (after) => {
-    const res = await fetch(
+    const res = await nodeFetch(
       `https://github.com/Xiphe/budgetbudget/releases.atom${
         after ? `?after=${after}` : ""
       }`,
@@ -86,24 +84,19 @@ const fetchReleases = mem(
 );
 
 /**
- * @param {string} channel
- * @param {string=} after
- * @param {ReleaseList=} found
- * @returns {Promise<Release | ReleaseList>}
+ * @param {string[]} [channels]
+ * @param {undefined | string} [after]
+ * @param {ReleaseList} [found]
+ * @returns {Promise<ReleaseList>}
  */
-async function findLatest(channel, after, found = {}) {
+async function findLatestChannels(
+  channels = [],
+  after = undefined,
+  found = {}
+) {
   const releaseEntries = await fetchReleases(after);
   if (!releaseEntries.length) {
-    if (channel) {
-      const err = new Error(
-        `Could not find any release on channel "${channel}"`
-      );
-      /* @ts-ignore */
-      err.code = 404;
-      throw err;
-    } else {
-      return found;
-    }
+    return found;
   }
 
   let last = "";
@@ -112,7 +105,7 @@ async function findLatest(channel, after, found = {}) {
     const channelMatch = tag.match(/^v[0-9.]+-([a-zA-Z]+)\.[0-9]+$/);
     const channel = channelMatch ? channelMatch[1] : "stable";
     last = tag;
-    if (!found[channel]) {
+    if ((!channels.length || channels.includes(channel)) && !found[channel]) {
       found[channel] = {
         title: release.title[0],
         version: tag,
@@ -127,19 +120,33 @@ async function findLatest(channel, after, found = {}) {
     }
   });
 
-  if (channel && found[channel]) {
-    return found[channel];
+  if (channels.length && Object.keys(found).length === channels.length) {
+    return found;
   }
 
-  return findLatest(channel, last, found);
+  return findLatestChannels(channels, last, found);
 }
 
-module.exports.findLatest = findLatest;
-module.exports.getRelease = async (event) => {
-  const channel = event.pathParameters
-    ? event.pathParameters.channel
-    : undefined;
+/**
+ * @param {string} [channel]
+ * @returns {Promise<Release>}
+ */
+async function findLatest(channel) {
+  if (typeof channel !== "string") {
+    throw new Error("Missing channel parameter");
+  }
+  const { [channel]: release } = await findLatestChannels([channel]);
+  if (!release) {
+    const err = new Error(`Could not find any release on channel "${channel}"`);
+    /* @ts-ignore */
+    err.code = 404;
+    throw err;
+  }
+  return release;
+}
 
+/** @param {{ pathParameters?: { channel?: string } }} event */
+module.exports.getRelease = async ({ pathParameters: { channel } = {} }) => {
   try {
     return {
       statusCode: 200,
@@ -155,12 +162,34 @@ module.exports.getRelease = async (event) => {
     };
   }
 };
+
+/** @param {{ queryStringParameters: { channels?: string } | null }} event */
+module.exports.getReleases = async ({ queryStringParameters }) => {
+  const { channels: channelsParam = "" } = queryStringParameters || {};
+  const channels = channelsParam.split(",").filter((p) => p.length);
+
+  try {
+    return {
+      statusCode: 200,
+      body: JSON.stringify(await findLatestChannels(channels), null, 2),
+    };
+  } catch (err) {
+    return {
+      statusCode: err.code || 500,
+      body: err.message,
+      headers: {
+        ContentType: "text/plain",
+      },
+    };
+  }
+};
+
+/** @param {{ pathParameters?: { channel?: string } }} event */
 module.exports.download = async (event) => {
   try {
-    if (!event.pathParameters || !event.pathParameters.channel) {
-      throw new Error("Missing channel parameter");
-    }
-    const latest = await findLatest(event.pathParameters.channel);
+    const latest = await findLatest(
+      event.pathParameters && event.pathParameters.channel
+    );
     return {
       statusCode: 302,
       headers: {
