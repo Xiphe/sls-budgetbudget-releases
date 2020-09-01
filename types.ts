@@ -7,7 +7,11 @@ export type Release = {
   download: string;
   changelog: {
     [kind: string]: {
-      [scope: string]: { message: string; link: string; commit: string }[];
+      [scope: string]: {
+        message: string;
+        link: string;
+        commit: string;
+      }[];
     };
   };
 };

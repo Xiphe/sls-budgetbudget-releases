@@ -5,13 +5,22 @@ read latest releases from github feed and provide redirect or info without cors 
 ## Release Format
 
 ```ts
-type Release = {
+export type Release = {
   title: string;
   version: string;
   channel: string;
   link: string;
+  updated: string;
   download: string;
-  changelog: string;
+  changelog: {
+    [kind: string]: {
+      [scope: string]: {
+        message: string;
+        link: string;
+        commit: string;
+      }[];
+    };
+  };
 };
 ```
 
