@@ -183,21 +183,32 @@ async function findLatest(channel) {
   return release;
 }
 
+/** @param {{ [key: string]: any }} res */
+function withCors({ headers = {}, ...rest }) {
+  return {
+    ...rest,
+    headers: {
+      ...headers,
+      "Access-Control-Allow-Origin": "*",
+    },
+  };
+}
+
 /** @param {{ pathParameters?: { channel?: string } }} event */
 module.exports.getRelease = async ({ pathParameters: { channel } = {} }) => {
   try {
-    return {
+    return withCors({
       statusCode: 200,
       body: JSON.stringify(await findLatest(channel), null, 2),
-    };
+    });
   } catch (err) {
-    return {
+    return withCors({
       statusCode: err.code || 500,
       body: err.message,
       headers: {
         ContentType: "text/plain",
       },
-    };
+    });
   }
 };
 
@@ -207,18 +218,18 @@ module.exports.getReleases = async ({ queryStringParameters }) => {
   const channels = channelsParam.split(",").filter((p) => p.length);
 
   try {
-    return {
+    return withCors({
       statusCode: 200,
       body: JSON.stringify(await findLatestChannels(channels), null, 2),
-    };
+    });
   } catch (err) {
-    return {
+    return withCors({
       statusCode: err.code || 500,
       body: err.message,
       headers: {
         ContentType: "text/plain",
       },
-    };
+    });
   }
 };
 
