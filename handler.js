@@ -131,15 +131,16 @@ async function findLatestChannels(
             const scope = $scope.length ? $scope.text().replace(/:$/, "") : "_";
             $commitLink.remove();
             $scope.remove();
-            const text = $(childEl)
+            const message = $(childEl)
               .text()
               .replace(/[\(\)]+$/, "")
               .trim();
 
             if (!changelog[type][scope]) {
-              changelog[type][scope] = {};
+              changelog[type][scope] = [];
             }
-            changelog[type][scope] = { text, link, commit };
+
+            changelog[type][scope].push({ message, link, commit });
           });
       });
 
