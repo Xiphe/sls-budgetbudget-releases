@@ -18,9 +18,11 @@
   "license": "MIT",
   "dependencies": {
     "cheerio": "1.0.0-rc.3",
+    "filesize": "6.1.0",
     "mem": "6.1.1",
     "node-fetch": "2.6.0",
-    "xml2js": "0.4.23"
+    "xml2js": "0.4.23",
+    "yaml": "1.10.0"
   },
   "devDependencies": {}
 }

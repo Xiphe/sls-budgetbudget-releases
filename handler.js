@@ -5,12 +5,19 @@
 /** @type {typeof window.fetch} */
 const nodeFetch = require("node-fetch");
 const mem = require("mem");
+const YAML = require("yaml");
+const filesize = require("filesize");
 const cheerio = require("cheerio");
 const { parseStringPromise } = require("xml2js");
 
 /** @typedef {import("./types").ReleaseResponseEntry} ReleaseResponseEntry */
 /** @typedef {import("./types").Release} Release */
 /** @typedef {import("./types").ReleaseList} ReleaseList */
+/** @typedef {import("./types").ReleaseWithPendingFiles} ReleaseWithPendingFiles */
+/** @typedef {import("./types").LatestMac} LatestMac */
+/** @typedef {import("./types").LatestMacFile} LatestMacFile */
+
+const REPO = "https://github.com/Xiphe/budgetbudget";
 
 /**
  * @param {unknown} thing
@@ -22,7 +29,7 @@ function isPlainObject(thing) {
 
 /**
  * @param {unknown} entry
- * @returns {thing is ReleaseResponseEntry}
+ * @returns {entry is ReleaseResponseEntry}
  */
 function isReleaseEntry(entry) {
   const valid =
@@ -57,6 +64,37 @@ function isReleaseEntry(entry) {
 }
 
 /**
+ * @param {unknown} entry
+ * @returns {entry is LatestMacFile}
+ */
+function isLatestMacFile(entry) {
+  const valid =
+    isPlainObject(entry) &&
+    /* url */
+    typeof entry.url === "string" &&
+    /* sha512 */
+    typeof entry.sha512 === "string" &&
+    /* sha512 */
+    typeof entry.size === "number";
+
+  return valid;
+}
+
+/**
+ * @param {unknown} entry
+ * @returns {entry is LatestMac}
+ */
+function isLatestMac(entry) {
+  const valid =
+    isPlainObject(entry) &&
+    /* link */
+    Array.isArray(entry.files) &&
+    entry.files.length === entry.files.filter(isLatestMacFile).length;
+
+  return valid;
+}
+
+/**
  * Cache responses so in case lambda is re-used we are faster
  */
 const fetchReleases = mem(
@@ -66,9 +104,7 @@ const fetchReleases = mem(
    */
   async (after) => {
     const res = await nodeFetch(
-      `https://github.com/Xiphe/budgetbudget/releases.atom${
-        after ? `?after=${after}` : ""
-      }`,
+      `${REPO}/releases.atom${after ? `?after=${after}` : ""}`,
       {}
     );
     const text = await res.text();
@@ -87,6 +123,48 @@ const fetchReleases = mem(
     return entry.filter(isReleaseEntry);
   }
 );
+
+/**
+ * @param {string} tag
+ * @returns {Promise<Release['files']>}
+ */
+async function getFiles(tag) {
+  const latest = `${REPO}/releases/download/${tag}/latest-mac.yml`;
+  const res = await nodeFetch(latest);
+  const raw = await res.text();
+  const data = YAML.parse(raw);
+
+  if (!isLatestMac(data)) {
+    throw new Error(`Invalid format of ${tag}/latest-mac.yml`);
+  }
+
+  const { files } = data;
+  /** @type {Partial<Release['files']>} */
+  const init = {};
+  const { x64, arm64 } = files.reduce((memo, file) => {
+    const m = file.url.match(/(-arm64)?\.dmg$/);
+
+    if (!m) {
+      return memo;
+    }
+
+    return {
+      ...memo,
+      [m[1] ? "arm64" : "x64"]: {
+        download: `${REPO}/releases/download/${tag}/${file.url}`,
+        sha512: file.sha512,
+        size: filesize(file.size),
+      },
+    };
+    return memo;
+  }, init);
+
+  if (!x64) {
+    throw new Error("Missing x64 release");
+  }
+
+  return { x64, arm64 };
+}
 
 /**
  * @param {string[]} [channels]
@@ -149,8 +227,9 @@ async function findLatestChannels(
         updated: release.updated[0],
         version: tag,
         channel,
-        link: `https://github.com/Xiphe/budgetbudget/releases/tag/${tag}`,
-        download: `https://github.com/Xiphe/budgetbudget/releases/download/${tag}/BudgetBudget-${tag.replace(
+        files: () => getFiles(tag),
+        link: `${REPO}/releases/tag/${tag}`,
+        download: `${REPO}/releases/download/${tag}/BudgetBudget-${tag.replace(
           /^v/,
           ""
         )}.dmg`,
@@ -167,6 +246,17 @@ async function findLatestChannels(
 }
 
 /**
+ * @param {ReleaseList[string]} [releaseWithPendingFiles]
+ * @returns {Promise<Release>}
+ */
+async function resolveReleaseFiles(releaseWithPendingFiles) {
+  return {
+    ...releaseWithPendingFiles,
+    files: await releaseWithPendingFiles.files(),
+  };
+}
+
+/**
  * @param {string} [channel]
  * @returns {Promise<Release>}
  */
@@ -174,14 +264,17 @@ async function findLatest(channel) {
   if (typeof channel !== "string") {
     throw new Error("Missing channel parameter");
   }
-  const { [channel]: release } = await findLatestChannels([channel]);
-  if (!release) {
+  const { [channel]: releaseWithPendingFiles } = await findLatestChannels([
+    channel,
+  ]);
+  if (!releaseWithPendingFiles) {
     const err = new Error(`Could not find any release on channel "${channel}"`);
     /* @ts-ignore */
     err.code = 404;
     throw err;
   }
-  return release;
+
+  return resolveReleaseFiles(releaseWithPendingFiles);
 }
 
 /** @param {{ [key: string]: any }} res */
@@ -219,9 +312,21 @@ module.exports.getReleases = async ({ queryStringParameters }) => {
   const channels = channelsParam.split(",").filter((p) => p.length);
 
   try {
+    const latest = await findLatestChannels(channels);
+    const latestResolved = Object.fromEntries(
+      await Promise.all(
+        Object.entries(
+          latest
+        ).map(async ([channel, releaseWithPendingFiles]) => [
+          channel,
+          await resolveReleaseFiles(releaseWithPendingFiles),
+        ])
+      )
+    );
+
     return withCors({
       statusCode: 200,
-      body: JSON.stringify(await findLatestChannels(channels), null, 2),
+      body: JSON.stringify(latestResolved, null, 2),
     });
   } catch (err) {
     return withCors({
@@ -234,16 +339,25 @@ module.exports.getReleases = async ({ queryStringParameters }) => {
   }
 };
 
-/** @param {{ pathParameters?: { channel?: string } }} event */
+/** @param {{ pathParameters?: { channel?: string, arch?: 'x64' | 'arm64' } }} event */
 module.exports.download = async (event) => {
   try {
     const latest = await findLatest(
       event.pathParameters && event.pathParameters.channel
     );
+    const arch = (event.pathParameters && event.pathParameters.arch) || "x64";
+    const { download } = latest.files[arch] || {};
+
+    if (!download) {
+      const err = new Error("Not Found");
+      err.code = 404;
+      throw err;
+    }
+
     return {
       statusCode: 302,
       headers: {
-        Location: latest.download,
+        Location: download,
       },
     };
   } catch (err) {

@@ -11,7 +11,12 @@ export type Release = {
   channel: string;
   link: string;
   updated: string;
+  /** @deprecated use Release['files']['x64']['download'] instead */
   download: string;
+  files: {
+    x64: File;
+    arm64?: File;
+  };
   changelog: {
     [kind: string]: {
       [scope: string]: {
@@ -40,6 +45,6 @@ Returns `{ [channel: string]: Release | undefined }` for given channels
 
 Returns `Release` for given channel
 
-#### `/download/{channel}`
+#### `/download/{channel}/{arch=x64}`
 
-302 redirects to `Release.download` for given channel
+302 redirects to `Release.download` for given channel and arch (`x64` or `arm64`)

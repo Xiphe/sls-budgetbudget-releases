@@ -1,7 +1,7 @@
 (async () => {
   console.log(
-    await require("./handler").getReleases({
-      queryStringParameters: null,
+    await require("./handler").download({
+      pathParameters: { channel: "alpha", arch: "arm64" },
     })
   );
 })().catch((err) => {
