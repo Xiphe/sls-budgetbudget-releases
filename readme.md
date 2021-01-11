@@ -5,7 +5,12 @@ read latest releases from github feed and provide redirect or info without cors 
 ## Release Format
 
 ```ts
-export type Release = {
+type File = {
+  download: string;
+  sha512: string;
+  size: string;
+};
+type Release = {
   title: string;
   version: string;
   channel: string;
